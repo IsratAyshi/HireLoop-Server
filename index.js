@@ -61,6 +61,24 @@ async function run() {
         res.send(result);
     });
 
+    // company related APIs
+
+    app.get('/api/my/companies', async (req, res) => {
+        const query = {};
+        if (req.query.recruiterId) {
+            query.recruiterId = req.query.recruiterId;
+        }
+        const result = await companyCollection.findOne(query);
+        res.send(result || {});
+        // use res.json(result) instead of res.send(result), it sends "null" as valid JSON when nothing found
+    });
+
+    app.post('/api/companies', async (req, res) => {
+        const company = req.body;
+        const result = await companyCollection.insertOne(company);
+        res.send(result);
+    });
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
