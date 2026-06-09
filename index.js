@@ -6,7 +6,7 @@ const app = express()
 const dotenv = require("dotenv");
 dotenv.config();
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 app.use(cors());
 app.use(express.json());
@@ -37,8 +37,18 @@ async function run() {
     const database = client.db("hireloop_db");
     const jobCollection = database.collection("jobs");
     const companyCollection = database.collection("companies");
+    const usersCollection = database.collection("user");
     
     // --- API routes ---
+
+    app.get('/api/users', async (req, res) => {
+        const cursor = usersCollection.find().skip(1);
+        const result = await cursor.toArray();
+        res.send(result);
+    })
+
+    // job related APIs
+
     app.get('/api/jobs', async (req, res) => {
         const query = {};
 
@@ -54,14 +64,37 @@ async function run() {
         res.send(result);
     });
 
-
-    app.post('/api/jobs', async (req, res) => {
-        const job = req.body;
-        const result = await jobCollection.insertOne(job);
+    app.get('/api/jobs/:id', async (req, res) => {
+        const id = req.params.id;
+        const query = { 
+            _id: new ObjectId(id) 
+        };
+        const result = await jobCollection.findOne(query);
         res.send(result);
     });
 
+    app.post('/api/jobs', async (req, res) => {
+        const job = req.body;
+
+        // add createdAt from the server side instead of the client, so that the date is always the same and centralized
+        const newJob = {
+            ...job,
+            createdAt: new Date()
+        }
+        const result = await jobCollection.insertOne(newJob);
+        res.send(result);
+    });
+
+
+
+
     // company related APIs
+
+    app.get('/api/companies', async (req, res) => {
+        const cursor = companyCollection.find().skip(2);
+        const result = await cursor.toArray();
+        res.send(result);
+    });
 
     app.get('/api/my/companies', async (req, res) => {
         const query = {};
@@ -75,7 +108,12 @@ async function run() {
 
     app.post('/api/companies', async (req, res) => {
         const company = req.body;
-        const result = await companyCollection.insertOne(company);
+
+        const newCompany = {
+            ...company,
+            createdAt: new Date()
+        }
+        const result = await companyCollection.insertOne(newCompany);
         res.send(result);
     });
 
