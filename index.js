@@ -122,10 +122,19 @@ async function run() {
 
 
     // company related APIs
+    // app.get('/api/companies', async (req, res) => {
+    //     const cursor = companyCollection.find().skip(2);
+    //     const result = await cursor.toArray();
+    //     res.send(result);
+    // });
+
     app.get('/api/companies', async (req, res) => {
-        const cursor = companyCollection.find().skip(2);
-        const result = await cursor.toArray();
-        res.send(result);
+        const cursor = companyCollection.find();
+        const companies = await cursor.toArray();
+
+
+
+        res.send(companies);
     });
 
     app.get('/api/my/companies', async (req, res) => {
@@ -148,6 +157,21 @@ async function run() {
         const result = await companyCollection.insertOne(newCompany);
         res.send(result);
     });
+
+    app.patch('/api/companies/:id', async (req, res) => {
+        const id = req.params.id;
+        const updatedCompany = req.body;
+        const filter = { _id: new ObjectId(id) };
+
+        const updateDoc = {
+            $set: {
+                status: updatedCompany.status,
+                // updatedAt: new Date()
+            }
+        }
+        const result = await companyCollection.updateOne(filter, updateDoc);
+        res.send(result);
+    })
 
 
     // plan related APIs
