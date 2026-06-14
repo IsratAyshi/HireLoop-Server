@@ -128,14 +128,62 @@ async function run() {
     //     res.send(result);
     // });
 
+    // inefficient way to join/aggregate collections
     app.get('/api/companies', async (req, res) => {
-        const cursor = companyCollection.find();
+        // const cursor = companyCollection.find();
+        const cursor = companyCollection.find().sort({ createdAt: -1 }).skip(2); //descending
         const companies = await cursor.toArray();
 
-
+        for (const company of companies) {
+            const filter = { 
+                companyId: company._id.toString()
+            };
+            const jobCount = await jobCollection.countDocuments(filter);
+            company.jobCount = jobCount;
+        }
 
         res.send(companies);
     });
+
+    // efficient way to join/aggregate collections
+    app.get('/api/companies2', async (req, res) => {
+        const pipeline = [
+            { $skip: 2 },
+            { $limit: 2 },         
+        ];
+
+        const cursor = companyCollection.aggregate(pipeline);
+        const result = await cursor.toArray();
+        res.send(result);
+    });
+
+    // join/aggregate collections example
+    app.get('api/stats', async (req, res) => {
+        const pipeline = [
+            { 
+                $group: {   
+                    _id: "$jobType", // group key field
+                    count: { $sum: 1 } // count the number of documents in each group, +1 for each doc
+                } 
+            },
+            {
+                $project: {
+                    jobType: "$_id", // rename _id to jobType
+                    count: 1, // keep count field
+                    _id: 0 // remove _id field
+                }
+            }, 
+            {
+                $sort: { count: 1 } // ascending based on count field
+            }
+            
+        ]
+
+        const cursor = jobCollection.aggregate(pipeline);
+        const result = await cursor.toArray();
+        res.send(result);
+    })
+    
 
     app.get('/api/my/companies', async (req, res) => {
         const query = {};
