@@ -76,8 +76,11 @@ async function run() {
         const session = await sessionCollection.findOne(query);
         console.log('session: ', session);
 
+        if (!session) {
+            return res.status(401).send({message: 'Unauthorized access'});
+        }
+
         const userId = session.userId;
-        
         const userQuery = {
             _id: userId
         }
@@ -85,6 +88,9 @@ async function run() {
         const user = await usersCollection.findOne(userQuery);
         console.log('user of the current session: ', user);
 
+        if (!user) {
+            return res.status(401).send({message: 'Unauthorized access'});
+        }
 
         // set data in the req object
         req.user = user;
@@ -118,11 +124,15 @@ async function run() {
 
     
     // --- API routes ---
-    app.get('/api/users', async (req, res) => {
-        const cursor = usersCollection.find().skip(1);
-        const result = await cursor.toArray();
-        res.send(result);
-    })
+
+    
+    // app.get('/api/users', async (req, res) => {
+    //     const cursor = usersCollection.find().skip(1);
+    //     const result = await cursor.toArray();
+    //     res.send(result);
+    // })           ---->betterauth admin plugin will do this
+
+
 
     // job related APIs
     app.get('/api/jobs', async (req, res) => {
