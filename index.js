@@ -8,6 +8,7 @@ dotenv.config();
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
+// middleware, app.use() means run before every api request
 app.use(cors());
 app.use(express.json());
 
@@ -17,6 +18,13 @@ const uri = process.env.MONGODB_URI;
 app.get('/', (req, res) => {
   res.send('Hello World!')
 })
+
+
+// custom middleware, can be used in any specific route before async (req, res) or use app.use(logger) to run on all routes
+const logger = (req, res, next) => {
+    console.log("logger middleware logged", req.params);
+    next(); // continue to the next stage
+}
 
 
 
@@ -41,6 +49,73 @@ async function run() {
     const applicationsCollection = database.collection("applications");
     const planCollection = database.collection("plans");
     const subscriptionCollection = database.collection('subscriptions');
+    const sessionCollection = database.collection('session');
+
+
+
+    // VERIFICATION RELATED
+
+    // custom middleware to verify token for private api routes
+    const verifyToken = async(req, res, next) => {
+        // console.log('headers', req.headers);
+        const authHeader = req.headers?.authorization;
+
+        if (!authHeader) {
+            return res.status(401).send({message: 'Unauthorized access'});
+        }
+
+        const token = authHeader.split(' ')[1];
+        // console.log('token', token);
+
+        if (!token) {
+            return res.status(401).send({message: 'Unauthorized access'});
+        }
+
+        // Now fetch the session user using the token
+        const query = { token: token };
+        const session = await sessionCollection.findOne(query);
+        console.log('session: ', session);
+
+        const userId = session.userId;
+        
+        const userQuery = {
+            _id: userId
+        }
+
+        const user = await usersCollection.findOne(userQuery);
+        console.log('user of the current session: ', user);
+
+
+        // set data in the req object
+        req.user = user;
+        next();
+    }
+
+
+    // must be used after verifyToken, because verifyToken sets the req.user we're using here
+    const verifySeeker = async(req, res, next) => {
+        if (req.user?.role !== 'seeker') {
+            return res.status(403).send({message: 'Forbidden access'});
+        } 
+        next();
+    }
+
+    // must be used after verifyToken middleware
+    const verifyAdmin = async(req, res, next) => {
+        if (req.user?.role !== 'admin') {
+            return res.status(403).send({message: 'Forbidden access'});
+        }
+        next();
+    }
+
+    // must be used after verifyToken middleware
+    const verifyRecruiter = async(req, res, next) => {
+        if (req.user?.role !== 'recruiter') {
+            return res.status(403).send({message: 'Forbidden access'});
+        }
+        next();
+    }
+
     
     // --- API routes ---
     app.get('/api/users', async (req, res) => {
@@ -89,12 +164,19 @@ async function run() {
 
 
     // application related APIs
-    app.get('/api/applications', async (req, res) => {
+    app.get('/api/applications', verifyToken, verifySeeker, async (req, res) => {
         const query = {};
 
         // what if applicant wants to find their applications
         if (req.query.applicantId) {
             query.applicantId = req.query.applicantId;
+
+            // after verifying as a seeker user, verify their own applicantId. Check whether asking for their own info or someone else's
+            console.log(req.user, req.query.applicantId);
+            if (req.user._id.toString() !== req.query.applicantId) {
+                return res.status(403).send({message: 'Forbidden access'});
+            }
+            
         }
         
         // what if recruiter wants to find applications for a specific job
@@ -122,6 +204,7 @@ async function run() {
 
 
     // company related APIs
+
     // app.get('/api/companies', async (req, res) => {
     //     const cursor = companyCollection.find().skip(2);
     //     const result = await cursor.toArray();
@@ -129,7 +212,7 @@ async function run() {
     // });
 
     // inefficient way to join/aggregate collections
-    app.get('/api/companies', async (req, res) => {
+    app.get('/api/companies', verifyToken, async (req, res) => {
         // const cursor = companyCollection.find();
         const cursor = companyCollection.find().sort({ createdAt: -1 }).skip(2); //descending
         const companies = await cursor.toArray();
@@ -206,7 +289,7 @@ async function run() {
         res.send(result);
     });
 
-    app.patch('/api/companies/:id', async (req, res) => {
+    app.patch('/api/companies/:id', logger, verifyToken, verifyAdmin, async (req, res) => {
         const id = req.params.id;
         const updatedCompany = req.body;
         const filter = { _id: new ObjectId(id) };
